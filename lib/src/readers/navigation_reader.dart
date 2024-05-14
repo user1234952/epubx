@@ -1,11 +1,11 @@
 import 'dart:async';
+import 'dart:convert' as convert;
 
 import 'package:archive/archive.dart';
-import 'dart:convert' as convert;
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:epubx/src/schema/opf/epub_version.dart';
-import 'package:xml/xml.dart' as xml;
 import 'package:path/path.dart' as path;
+import 'package:xml/xml.dart' as xml;
 
 import '../schema/navigation/epub_metadata.dart';
 import '../schema/navigation/epub_navigation.dart';
@@ -30,6 +30,7 @@ import '../utils/zip_path_utils.dart';
 
 class NavigationReader {
   static String? _tocFileEntryPath;
+
   static Future<EpubNavigation> readNavigation(Archive epubArchive,
       String contentDirectoryPath, EpubPackage package) async {
     var result = EpubNavigation();
@@ -206,7 +207,6 @@ class NavigationReader {
 //        EpubNavigationPageList pageList = readNavigationPageList(pageListNode);
 //        result.PageList = pageList;
 //      }
-
     }
 
     return result;
@@ -247,7 +247,7 @@ class NavigationReader {
           break;
         case 'href':
           if (_tocFileEntryPath!.length < 2 ||
-              attributeValue.contains(_tocFileEntryPath!)) {
+              attributeValue.startsWith(_tocFileEntryPath!)) {
             result.Source = attributeValue;
           } else {
             result.Source = path.normalize(_tocFileEntryPath! + attributeValue);
@@ -256,11 +256,22 @@ class NavigationReader {
           break;
       }
     });
-    if (result.Source == null || result.Source!.isEmpty) {
-      throw Exception(
-          'Incorrect EPUB navigation content: content source is missing.');
-    }
+    // element with span, the content will be null;
+    // if (result.Source == null || result.Source!.isEmpty) {
+    //   throw Exception(
+    //       'Incorrect EPUB navigation content: content source is missing.');
+    // }
     return result;
+  }
+
+  static String extractContentPath(String _tocFileEntryPath, String ref) {
+    if (!_tocFileEntryPath.endsWith('/'))
+      _tocFileEntryPath = _tocFileEntryPath + '/';
+    var r = _tocFileEntryPath + ref;
+    r = r.replaceAll('/\./', '/');
+    r = r.replaceAll(RegExp(r'/[^/]+/\.\./'), '/');
+    r = r.replaceAll(RegExp(r'^[^/]+/\.\./'), '');
+    return r;
   }
 
   static EpubNavigationDocAuthor readNavigationDocAuthor(
@@ -383,10 +394,10 @@ class NavigationReader {
           break;
       }
     });
-    if (result.NavigationLabels!.isEmpty) {
-      throw Exception(
-          'Incorrect EPUB navigation page target: at least one navLabel element is required.');
-    }
+    // if (result.NavigationLabels!.isEmpty) {
+    //   throw Exception(
+    //       'Incorrect EPUB navigation page target: at least one navLabel element is required.');
+    // }
     return result;
   }
 
@@ -558,6 +569,7 @@ class NavigationReader {
         .forEach((xml.XmlElement navigationPointChildNode) {
       switch (navigationPointChildNode.name.local.toLowerCase()) {
         case 'a':
+        case 'span':
           var navigationLabel = readNavigationLabelV3(navigationPointChildNode);
           result.NavigationLabels!.add(navigationLabel);
           var content = readNavigationContentV3(navigationPointChildNode);
